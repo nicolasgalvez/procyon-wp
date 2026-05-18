@@ -18,7 +18,6 @@ wp-content/sucuri
 wp-config.php
 .htaccess
 .git
-node_modules/
 Divi/
 .cache/
 .DS_Store
