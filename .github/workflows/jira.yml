@@ -1,7 +1,12 @@
 name: Jira
 
+# pull_request_target runs in the base-branch context with secrets exposed,
+# even when the PR head is a fork. The transition jobs need JIRA_* secrets,
+# so this trigger is required for cross-fork PR automation. Safe here because
+# no job checks out the PR head or executes fork-supplied code — they only
+# call an org-controlled action and curl the Jira REST API.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, closed]
 
 jobs:
