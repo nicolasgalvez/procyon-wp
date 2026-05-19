@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   release-please:
+    # Skip on forks — only the canonical repo should open release PRs or publish.
+    if: github.repository_owner == 'procyon-creative'
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
@@ -19,16 +21,16 @@ jobs:
         with:
           release-type: node
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: ${{ steps.release.outputs.release_created }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         if: ${{ steps.release.outputs.release_created }}
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: ${{ steps.release.outputs.release_created }}
         with:
           version: 9
