@@ -2,16 +2,16 @@ name: Jira
 
 on:
   pull_request:
-    types: [opened, edited, synchronize]
+    types: [opened, synchronize, reopened, closed]
 
 jobs:
-  jira:
+  jira-sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: procyon-creative/jira-action-man@main
+      - uses: procyon-creative/jira-action-man@v2
         id: jira
         with:
-          projects: "PTL"
+          projects: "PWC"
           from: "branch,title,commits,body"
           post_to_jira: true
           jira_comment_mode: update
@@ -20,5 +20,76 @@ jobs:
           jira_api_token: ${{ secrets.JIRA_API_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - if: steps.jira.outputs.found == 'true'
-        run: echo "Linked Jira issues - ${{ steps.jira.outputs.keys }}"
+  jira-transition-qa:
+    if: github.event.action == 'opened' || github.event.action == 'reopened'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: procyon-creative/jira-action-man@v2
+        id: jira
+        with:
+          projects: "PWC"
+          from: "branch,title,commits,body"
+          post_to_jira: false
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Transition Jira issues to QA
+        if: steps.jira.outputs.found == 'true'
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_KEYS: ${{ steps.jira.outputs.keys }}
+          TARGET_COLUMN: "QA"
+        run: |
+          for key in $(echo "$JIRA_KEYS" | jq -r '.[]'); do
+            echo "Transitioning $key to $TARGET_COLUMN..."
+            TRANSITIONS=$(curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+              "$JIRA_BASE_URL/rest/api/3/issue/$key/transitions")
+            TARGET_ID=$(echo "$TRANSITIONS" | jq -r --arg name "$TARGET_COLUMN" '.transitions[] | select(.name == $name) | .id')
+            if [ -n "$TARGET_ID" ]; then
+              curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+                -X POST \
+                -H "Content-Type: application/json" \
+                -d "{\"transition\":{\"id\":\"$TARGET_ID\"}}" \
+                "$JIRA_BASE_URL/rest/api/3/issue/$key/transitions"
+              echo "  ✓ $key → $TARGET_COLUMN"
+            else
+              echo "  ⚠ No '$TARGET_COLUMN' transition available for $key"
+            fi
+          done
+
+  jira-transition-done:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: procyon-creative/jira-action-man@v2
+        id: jira
+        with:
+          projects: "PWC"
+          from: "branch,title,commits,body"
+          post_to_jira: false
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Transition Jira issues to Done
+        if: steps.jira.outputs.found == 'true'
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_KEYS: ${{ steps.jira.outputs.keys }}
+        run: |
+          for key in $(echo "$JIRA_KEYS" | jq -r '.[]'); do
+            TRANSITIONS=$(curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+              "$JIRA_BASE_URL/rest/api/3/issue/$key/transitions")
+            DONE_ID=$(echo "$TRANSITIONS" | jq -r '.transitions[] | select(.name == "Done") | .id')
+            if [ -n "$DONE_ID" ]; then
+              curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+                -X POST \
+                -H "Content-Type: application/json" \
+                -d "{\"transition\":{\"id\":\"$DONE_ID\"}}" \
+                "$JIRA_BASE_URL/rest/api/3/issue/$key/transitions"
+              echo "  ✓ $key → Done"
+            else
+              echo "  ⚠ No 'Done' transition for $key"
+            fi
+          done
