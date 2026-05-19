@@ -28,7 +28,7 @@
     "staging"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "csv-parser": "^3.0.0",

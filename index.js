@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const yargs = require('yargs/yargs')
+const yargs = require('yargs')
 const path = require('path')
 const fs = require('fs')
 const { getProjectFromCwd } = require('./src/config/store')
