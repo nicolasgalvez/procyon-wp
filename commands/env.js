@@ -6,6 +6,7 @@ const {
   updateEnvironment,
   removeEnvironment
 } = require('../src/config/store')
+const { EnvironmentDefaults } = require('../src/config/environment-defaults')
 
 function resolveProject (argv) {
   if (argv.project && argv.project.name) return argv.project.name
@@ -76,7 +77,7 @@ module.exports = {
     if (argv.action === 'add') {
       requireName(argv)
 
-      const env = await collectEnvFields(argv)
+      const env = await collectEnvFields(argv, project.environments)
 
       addEnvironment(projectName, argv.name, env)
       console.log(`Added environment "${argv.name}" to ${projectName}.`)
@@ -124,14 +125,29 @@ module.exports = {
 }
 
 /**
- * Build env config from CLI flags if provided, otherwise prompt interactively.
+ * Build env config from CLI flags if provided, otherwise prompt interactively
+ * with defaults copied from an existing environment.
  */
-async function collectEnvFields (argv) {
+async function collectEnvFields (argv, environments) {
   const fromFlags = collectEnvFlags(argv)
   if (fromFlags.host && fromFlags.user && fromFlags.path) {
     return { port: 22, ...fromFlags }
   }
-  return promptEnvFields(fromFlags)
+  const defaults = new EnvironmentDefaults(environments, promptSourceEnvironment)
+  return promptEnvFields(await defaults.resolve(fromFlags))
+}
+
+/**
+ * Ask which existing environment to copy defaults from.
+ */
+async function promptSourceEnvironment (names) {
+  const { source } = await prompt({
+    type: 'select',
+    name: 'source',
+    message: 'Copy defaults from:',
+    choices: names
+  })
+  return source
 }
 
 /**
